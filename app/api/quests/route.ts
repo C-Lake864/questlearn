@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generateQuest } from "@/lib/anthropic";
+import { generateQuest } from "@/lib/ai";
 import { regionName } from "@/lib/story";
 
 // AI 생성은 시간이 걸리므로 라우트 최대 실행시간을 늘려줍니다. (Vercel)

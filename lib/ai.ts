@@ -1,41 +1,30 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { QuestStage } from "./types";
 import { WORLD_TITLE } from "./story";
 
-// 클라이언트도 "처음 사용할 때" 생성합니다. (빌드 시점에 깨지지 않도록)
-let client: Anthropic | null = null;
+// Google Gemini API로 퀴즈를 생성합니다. (무료 티어)
+// 키가 없으면 데모(목업) 모드로 동작합니다.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
 
-function getClient(): Anthropic {
-  if (client) return client;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY 환경변수가 없습니다.");
-  }
-  client = new Anthropic({ apiKey });
-  return client;
+export function isDemoMode(): boolean {
+  return !process.env.GEMINI_API_KEY;
 }
 
-// 최신 모델. (참고: claude-opus-4-8 = Opus 4.8)
-const MODEL = "claude-opus-4-8";
-
-// Claude가 반환할 JSON의 구조(구조화 출력).
+// Gemini 구조화 출력용 스키마 (Gemini는 타입을 대문자로 표기)
 const QUEST_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
+  type: "OBJECT",
   properties: {
     stages: {
-      type: "array",
+      type: "ARRAY",
       items: {
-        type: "object",
-        additionalProperties: false,
+        type: "OBJECT",
         properties: {
-          stage: { type: "integer" },
-          situation: { type: "string" },
-          question: { type: "string" },
-          choices: { type: "array", items: { type: "string" } },
-          answerIndex: { type: "integer" },
-          explanation: { type: "string" },
-          objective: { type: "string" },
+          stage: { type: "INTEGER" },
+          situation: { type: "STRING" },
+          question: { type: "STRING" },
+          choices: { type: "ARRAY", items: { type: "STRING" } },
+          answerIndex: { type: "INTEGER" },
+          explanation: { type: "STRING" },
+          objective: { type: "STRING" },
         },
         required: [
           "stage",
@@ -50,7 +39,7 @@ const QUEST_SCHEMA = {
     },
   },
   required: ["stages"],
-} as const;
+};
 
 function systemPrompt(regionName: string): string {
   return `당신은 교육 전문가이자 게임 퀘스트 디자이너입니다.
@@ -72,11 +61,6 @@ function systemPrompt(regionName: string): string {
 
 export interface GeneratedQuest {
   stages: QuestStage[];
-}
-
-// API 키가 없으면 데모(목업) 모드로 동작합니다.
-export function isDemoMode(): boolean {
-  return !process.env.ANTHROPIC_API_KEY;
 }
 
 // 데모 모드용 목업 생성기: 한 지역의 퀴즈 5개.
@@ -126,10 +110,12 @@ export async function generateQuest(
   material: string,
   regionName: string,
 ): Promise<QuestStage[]> {
-  if (isDemoMode()) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
     return generateMockQuest(title, material, regionName);
   }
 
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
   const userPrompt = `지역: ${regionName}
 
 [학습자료 제목]
@@ -138,23 +124,37 @@ ${title}
 [학습자료 본문]
 ${material}`;
 
-  const response = await getClient().messages.create({
-    model: MODEL,
-    max_tokens: 16000,
-    thinking: { type: "adaptive" },
-    system: systemPrompt(regionName),
-    output_config: {
-      format: { type: "json_schema", schema: QUEST_SCHEMA },
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
     },
-    messages: [{ role: "user", content: userPrompt }],
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemPrompt(regionName) }] },
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: QUEST_SCHEMA,
+        temperature: 0.8,
+        maxOutputTokens: 4096,
+      },
+    }),
   });
 
-  const textBlock = response.content.find((b) => b.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
-    throw new Error("AI 응답에서 결과를 찾지 못했습니다.");
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gemini 요청 실패 (${res.status}): ${detail.slice(0, 300)}`);
   }
 
-  const parsed = JSON.parse(textBlock.text) as GeneratedQuest;
+  const data = await res.json();
+  const text: string | undefined =
+    data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    throw new Error("Gemini 응답에서 결과를 찾지 못했습니다.");
+  }
+
+  const parsed = JSON.parse(text) as GeneratedQuest;
   if (!parsed.stages || parsed.stages.length === 0) {
     throw new Error("AI가 퀴즈를 생성하지 못했습니다.");
   }
