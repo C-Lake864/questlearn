@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useJourney } from "../../JourneyProvider";
-import { regionName, clueFor } from "@/lib/story";
+import { regionName, clueFor, characterFor } from "@/lib/story";
 import type { QuestStage } from "@/lib/types";
 
 type Phase = "topic" | "playing" | "result";
@@ -65,6 +65,7 @@ export default function RegionPage() {
   }
 
   const region = regionName(n);
+  const char = characterFor(n);
 
   async function startSession(e: React.FormEvent) {
     e.preventDefault();
@@ -162,6 +163,20 @@ export default function RegionPage() {
             통과하고 다음 길이 열려요.
           </p>
 
+          {/* 이 지역에서 만나는 인물 */}
+          <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-indigo-300">
+              <span>🧑‍🌾 이 지역의 인물</span>
+              <span className="text-slate-500">· {char.name}</span>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">
+              {char.setting}
+            </p>
+            <blockquote className="mt-3 border-l-4 border-amber-600/50 pl-3 text-sm italic text-amber-200/90">
+              “{char.quote}”
+            </blockquote>
+          </div>
+
           <form onSubmit={startSession} className="mt-5">
             <label className="mb-2 block text-sm font-medium text-slate-200">
               주제 (제목)
@@ -233,7 +248,8 @@ export default function RegionPage() {
                 🗺️ 지도의 다음 길이 드러났습니다!
               </div>
               <div className="mt-3 rounded-xl border border-indigo-800/50 bg-indigo-950/30 px-4 py-3 text-left text-sm text-indigo-200">
-                📜 발견한 기록: {clueFor(n)}
+                💭 <span className="text-slate-400">{char.name}이(가) 남긴 물음</span>
+                <br />“{clueFor(n)}”
               </div>
               <div className="mt-7 flex justify-center gap-3">
                 <button
