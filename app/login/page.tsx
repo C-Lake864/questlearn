@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,8 +34,7 @@ export default function LoginPage() {
         if (error) throw error;
         // 이메일 확인이 꺼져 있으면 바로 세션이 생깁니다.
         if (data.session) {
-          router.push("/");
-          router.refresh();
+          window.location.href = "/map";
           return;
         }
         // 이메일 확인이 켜져 있는 경우
@@ -49,8 +46,7 @@ export default function LoginPage() {
           password,
         });
         if (error) throw error;
-        router.push("/");
-        router.refresh();
+        window.location.href = "/map";
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "오류가 발생했습니다.";

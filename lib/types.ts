@@ -1,30 +1,34 @@
-// 퀘스트 한 단계(스테이지)의 구조
+// 한 퀴즈(문제)의 구조
 export interface QuestStage {
-  stage: number; // 단계 번호 (1~5)
-  regionName?: string; // 다아라 왕국의 지역 이름 (세계관 연출)
-  situation: string; // 게임적 상황 설명
+  stage: number; // 세션 내 문제 번호 (1~5)
+  situation?: string; // 지역 안에서의 짧은 상황 연출
   question: string; // 문제
   choices: string[]; // 선택지 (4개)
   answerIndex: number; // 정답 선택지 인덱스 (0~3)
   explanation: string; // 정답 해설
-  reward: string; // 획득 보상
-  clue?: string; // 정답 시 얻는 '기억의 성배' 단서
-  objective: string; // 이 문제로 확인하는 핵심 학습목표 한 문장
+  reward?: string; // (선택) 보상
+  objective?: string; // 이 문제로 확인하는 핵심 학습목표
+  // 하위호환용(예전 데이터)
+  regionName?: string;
+  clue?: string;
 }
 
-// DB에 저장되는 퀘스트 한 건의 구조
+// DB에 저장되는 세션(퀘스트) 한 건
 export interface Quest {
   id: string;
   title: string;
   source_material: string;
   stages: QuestStage[];
+  region_index: number | null;
+  completed: boolean;
   created_at: string;
 }
 
-// 목록 조회용(본문/스테이지 상세 없이 가벼운 형태)
-export interface QuestSummary {
-  id: string;
-  title: string;
-  created_at: string;
-  stageCount: number;
+// 지도(여정)의 한 지역 상태
+export interface JourneyRegion {
+  index: number; // 1~5
+  name: string; // 지역 이름 (story.ts)
+  completed: boolean; // 통과 여부
+  topic: string | null; // 이 지역 세션의 주제(있으면)
+  questId: string | null; // 로그인 시 DB id
 }
