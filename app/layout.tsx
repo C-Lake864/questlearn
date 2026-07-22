@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Gowun_Batang, Noto_Sans_KR } from "next/font/google";
 import Link from "next/link";
+import UserMenu from "./UserMenu";
 import "./globals.css";
 
 const sans = Noto_Sans_KR({
@@ -50,6 +51,7 @@ export default function RootLayout({
               >
                 내 퀘스트
               </Link>
+              <UserMenu />
             </nav>
           </div>
         </header>

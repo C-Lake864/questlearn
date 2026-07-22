@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 import { generateQuest } from "@/lib/anthropic";
 
 // AI 생성은 시간이 걸리므로 라우트 최대 실행시간을 늘려줍니다. (Vercel)
 export const maxDuration = 60;
 
-// GET /api/quests — 저장된 퀘스트 목록 조회
+// GET /api/quests — 로그인한 유저 본인의 퀘스트 목록 조회
 export async function GET() {
-  const { data, error } = await getSupabase()
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
+  // RLS 덕분에 자동으로 본인 것만 조회됩니다.
+  const { data, error } = await supabase
     .from("quests")
     .select("id, title, created_at, stages")
     .order("created_at", { ascending: false });
@@ -16,7 +26,6 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // 목록에서는 stage 개수만 넘겨 가볍게 만듭니다.
   const summaries = (data ?? []).map((q) => ({
     id: q.id,
     title: q.title,
@@ -27,8 +36,17 @@ export async function GET() {
   return NextResponse.json(summaries);
 }
 
-// POST /api/quests — 학습자료를 받아 AI로 퀘스트 생성 후 저장
+// POST /api/quests — 학습자료를 받아 AI로 퀘스트 생성 후 저장 (본인 소유)
 export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
   let body: { title?: string; material?: string };
   try {
     body = await req.json();
@@ -46,7 +64,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 1) Claude로 5단계 퀘스트 생성
+  // 1) Claude(또는 데모 목업)로 5단계 퀘스트 생성
   let stages;
   try {
     stages = await generateQuest(title, material);
@@ -58,10 +76,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 2) DB에 저장
-  const { data, error } = await getSupabase()
+  // 2) DB에 저장 (user_id = 로그인한 유저)
+  const { data, error } = await supabase
     .from("quests")
-    .insert({ title, source_material: material, stages })
+    .insert({ title, source_material: material, stages, user_id: user.id })
     .select("id")
     .single();
 
