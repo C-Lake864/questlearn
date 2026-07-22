@@ -71,6 +71,9 @@ export default function HomePage() {
           <br className="hidden sm:block" />
           5단계 게임 퀘스트 퀴즈로 바꿔드립니다.
         </p>
+        <p className="mx-auto mt-2 max-w-xl text-xs text-amber-400/70">
+          「다아라 왕국과 기억의 성배」 세계관으로 펼쳐지는 다섯 지역의 모험 🏰
+        </p>
       </section>
 
       {/* 데모 모드 안내 */}
