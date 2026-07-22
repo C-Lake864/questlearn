@@ -105,6 +105,7 @@ function generateMockQuest(
 }
 
 // 학습자료(제목+본문)와 지역 이름을 받아 퀴즈 5개를 생성합니다.
+// 키가 없거나, Gemini가 한도 초과(429)/오류를 내면 데모(목업) 퀴즈로 자동 대체합니다.
 export async function generateQuest(
   title: string,
   material: string,
@@ -115,8 +116,9 @@ export async function generateQuest(
     return generateMockQuest(title, material, regionName);
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-  const userPrompt = `지역: ${regionName}
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+    const userPrompt = `지역: ${regionName}
 
 [학습자료 제목]
 ${title}
@@ -124,39 +126,42 @@ ${title}
 [학습자료 본문]
 ${material}`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt(regionName) }] },
-      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: QUEST_SCHEMA,
-        temperature: 0.8,
-        maxOutputTokens: 4096,
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
       },
-    }),
-  });
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt(regionName) }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: QUEST_SCHEMA,
+          temperature: 0.8,
+          maxOutputTokens: 4096,
+        },
+      }),
+    });
 
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Gemini 요청 실패 (${res.status}): ${detail.slice(0, 300)}`);
-  }
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new Error(`Gemini ${res.status}: ${detail.slice(0, 200)}`);
+    }
 
-  const data = await res.json();
-  const text: string | undefined =
-    data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error("Gemini 응답에서 결과를 찾지 못했습니다.");
-  }
+    const data = await res.json();
+    const text: string | undefined =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error("빈 응답");
 
-  const parsed = JSON.parse(text) as GeneratedQuest;
-  if (!parsed.stages || parsed.stages.length === 0) {
-    throw new Error("AI가 퀴즈를 생성하지 못했습니다.");
+    const parsed = JSON.parse(text) as GeneratedQuest;
+    if (!parsed.stages || parsed.stages.length === 0) {
+      throw new Error("stages 없음");
+    }
+    return parsed.stages;
+  } catch (e) {
+    // 한도 초과·오류 시 데모 퀴즈로 자동 대체 (서비스가 끊기지 않도록)
+    console.warn("Gemini 생성 실패 → 데모 퀴즈로 대체:", e);
+    return generateMockQuest(title, material, regionName);
   }
-  return parsed.stages;
 }
